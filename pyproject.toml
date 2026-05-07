@@ -24,6 +24,11 @@ dependencies = [
 [project.optional-dependencies]
 pyg = ["torch", "torch_geometric"]
 dev = ["pytest", "ruff"]
+# Demo + notebook tooling. Pulls plotting and the embedded 3D viewer used
+# by notebooks/02_visualizing_features.ipynb. Not required for the core
+# adapter -- install with `pip install proteon-pyg[notebook]` when you
+# want to run the notebooks in JupyterLab.
+notebook = ["matplotlib", "py3Dmol", "jupyterlab", "ipykernel", "nbformat"]
 
 [build-system]
 requires = ["hatchling"]
