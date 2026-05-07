@@ -9,3 +9,7 @@ dist/
 .venv/
 venv/
 .env
+
+# Demo + notebook outputs
+demos/output/
+notebooks/.ipynb_checkpoints/
