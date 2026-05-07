@@ -36,11 +36,18 @@ transcription, not that `proteon` is non-deterministic.
 
 ## Evidence
 
-- `tests/test_parity.py` — three parity tests covering:
+- `tests/test_parity.py` — six parity tests covering:
   - per-residue SASA / RSA / DSSP / hbond_count / phi/psi/omega equality
-    (NaN-aware: NaN positions must remain NaN at the same indices)
+    (NaN-aware)
   - graph-level energy dict mapped to per-component scalar tensors
   - HETATM residues never carry a DSSP int code other than `-1`
+  - atom-level: per-atom pos / atom_sasa / charge / is_backbone / hetero
+    / atom_name / element / residue_index equal direct proteon API
+    output, with residue-level tensors still satisfying the residue
+    parity claim
+  - `proteon_pyg_data_batch(paths)` produces Data objects with exactly
+    the same attribute-set and tensor values as a Python loop calling
+    `proteon_pyg_data(p)` per path — at both residue and atom granularity
 - Fixtures: `1crn.pdb` (pure protein) and `1ake.pdb` (protein + waters/
   ligand). Tests skip cleanly when the fixtures are absent.
 - DSSP encoding round-trip (`tests/test_features.py`) catches the case
@@ -77,16 +84,16 @@ transcription, not that `proteon` is non-deterministic.
 
 ## What Is Still Lacking (Deferred Claims)
 
-- **Atom-level parity** (planned v0.0.2): the same trust property at
-  atom granularity. Cannot be declared until atom-level
-  `proteon_pyg_data` exists.
-- **Batch parity** (planned v0.0.3): batched feature attachment must
-  produce identical Data objects to a single-call loop. Cannot be
-  declared until the batch entry point exists.
+The atom-level and batch parity claims that were deferred at v0.0.1 are
+both promoted into the manifest as tier-`ci` claims as of v0.0.3, with
+real oracle, tolerance, command, and artifact entries. `deferred_claims:`
+is currently empty.
 
-Both are tracked under `deferred_claims:` in `evident.yaml` rather than
-declared as tier-`ci` claims with placeholder evidence (Validation
-Theater anti-pattern).
+Future work that may grow into manifest claims:
+- Tolerant batch loading (skip-on-fail mode) needs its own claim shape
+  because the input → output index correspondence stops being identity.
+- Accepting pre-loaded `proteon.Structure` objects directly is a
+  convenience refactor with no new trust property to claim.
 
 ## EVIDENT Lessons
 

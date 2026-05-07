@@ -6,6 +6,7 @@ from proteon_pyg.features import (
     decode_dssp,
     encode_dssp,
     proteon_pyg_data,
+    proteon_pyg_data_batch,
 )
 
 __all__ = [
@@ -14,6 +15,7 @@ __all__ = [
     "decode_dssp",
     "encode_dssp",
     "proteon_pyg_data",
+    "proteon_pyg_data_batch",
 ]
 
-__version__ = "0.0.1"
+__version__ = "0.0.3"

@@ -64,19 +64,98 @@ claims:
         explicit math.isnan checks at every dihedral index in the
         parity test.
 
+  - id: proteon-pyg-atom-level-parity
+    title: Atom-level Data tensors equal direct proteon per-atom outputs
+    case: CASE.md
+    source: src
+    tier: ci
+    trust_strategy:
+      - validation
+    claim: >
+      For every atom in an atom-granularity proteon_pyg_data Data, the
+      attached per-atom tensor values are exactly equal to what proteon
+      returns when called directly: pos equals atom (x, y, z); atom_sasa
+      equals proteon.atom_sasa(structure); charge / is_backbone / hetero
+      equal Atom.charge / .is_backbone / .hetero; atom_name and element
+      preserve their original strings; residue_index correctly maps each
+      atom back to its residue index in structure.residues. Per-residue
+      tensors at residue resolution remain parity-equal to the
+      residue-only manifest claim.
+    evidence:
+      oracle:
+        - proteon (direct atom_sasa + Atom API + residues iteration, same process)
+      tolerance: >
+        Exact equality for all per-atom tensors (post .numpy() round-trip);
+        list equality for atom_name and element; integer equality for
+        residue_index.
+      command: >
+        /scratch/TMAlign/proteon/.venv/bin/python -m pytest
+        tests/test_parity.py::test_parity_atom_level_features_match_direct_proteon_call -v
+      artifact: pytest exit code and captured failure diffs (stdout)
+    assumptions:
+      - structure.residues iteration order matches the flat order proteon's
+        atom_sasa() and structure.atoms emit; the test re-derives the
+        oracle via the same nested walk to guard against future drift.
+      - alt-loc handling follows proteon's residue.atoms iterator which
+        emits primary-conformer atoms only; this matches what proteon's
+        single-call atom_sasa is built on.
+    failure_modes:
+      - residue.atoms iteration order changes between proteon versions,
+        decoupling the (residue_index, atom-row) ordering from the
+        atom_sasa flat array. Mitigation parity test re-derives the
+        oracle via the same residues -> residue.atoms walk.
+      - alt-loc atoms are surfaced inconsistently between atom_sasa and
+        residue.atoms, producing length mismatches. Mitigation explicit
+        length-check error in _build_atom_block before any par-iter writes.
+
+  - id: proteon-pyg-batch-parity
+    title: proteon_pyg_data_batch produces identical Data to a single-call loop
+    case: CASE.md
+    source: src
+    tier: ci
+    trust_strategy:
+      - validation
+    claim: >
+      For any sequence of PDB paths, the Data objects returned by
+      proteon_pyg_data_batch(paths) carry exactly the same attribute set
+      and tensor values as those produced by [proteon_pyg_data(p) for p
+      in paths]. Holds at both residue and atom granularity. Strict mode
+      only -- one bad PDB raises and discards the batch.
+    evidence:
+      oracle:
+        - proteon_pyg_data (single-call helper, same process)
+      tolerance: >
+        Exact equality for every tensor (float dtype: numpy round-trip;
+        integer dtype: torch.equal; lists / strings: equality). The
+        single-call helper is itself parity-tested against direct proteon
+        API calls, so this claim is transitively a parity claim against
+        proteon.
+      command: >
+        /scratch/TMAlign/proteon/.venv/bin/python -m pytest
+        tests/test_parity.py::test_parity_batch_helper_matches_single_call_loop_residue
+        tests/test_parity.py::test_parity_batch_helper_matches_single_call_loop_atom -v
+      artifact: pytest exit code and captured failure diffs (stdout)
+    assumptions:
+      - proteon's batch primitives (batch_load, batch_residue_sasa,
+        batch_relative_sasa, batch_atom_sasa, batch_dssp, batch_dihedrals,
+        batch_hbond_count, batch_compute_energy) produce per-structure
+        results identical to their single-call counterparts. proteon
+        ships its own parity tests for this contract.
+      - Strict mode only -- the batch helper does not yet support tolerant
+        loading, so any failed PDB raises a Python exception rather than
+        being skipped.
+    failure_modes:
+      - A future proteon batch primitive drifts from its single-call
+        sibling in iteration order or rounding. Mitigation full
+        attribute-set equality assertion in
+        test_parity_batch_helper_matches_single_call_loop_*.
+      - Dual-resolution Data (atom granularity carries both atom-level
+        and residue-level tensors) silently loses one of the two blocks
+        in the batch path. Mitigation the parity test runs at both
+        granularities and asserts attribute-key set equality.
+
 # Deferred claims are tracked separately so the validated manifest never
 # carries placeholder evidence (Validation Theater anti-pattern). Each entry
 # is promoted into `claims:` only once it has real oracle, tolerance, command,
 # and artifact.
-deferred_claims:
-  - id: proteon-pyg-atom-level-parity
-    title: Atom-level Data tensors match proteon per-atom outputs
-    intended_tier: ci
-    blockers:
-      - Atom-level proteon_pyg_data not yet implemented (planned v0.0.2).
-
-  - id: proteon-pyg-batch-parity
-    title: Batched feature attachment equals a single-call loop
-    intended_tier: ci
-    blockers:
-      - Batch entry point not yet implemented (planned v0.0.3).
+deferred_claims: []

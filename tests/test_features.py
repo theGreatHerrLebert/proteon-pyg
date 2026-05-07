@@ -178,3 +178,122 @@ def test_proteon_features_transform_requires_pdb_path() -> None:
     tf = ProteonFeatures()
     with pytest.raises(ValueError, match="pdb_path"):
         tf(data)
+
+
+# ---------------------------------------------------------------------------
+# Atom granularity (v0.0.2)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(not TEST_PDB.exists(), reason="1crn.pdb fixture not available")
+def test_proteon_pyg_data_atom_level_1crn() -> None:
+    """Atom granularity emits per-atom AND per-residue tensors at their natural shape."""
+    proteon_pyg_data = _import_pyg()
+    data = proteon_pyg_data(
+        TEST_PDB, granularity="atom", hbond_count=True, dihedrals=True
+    )
+
+    n_atoms = data.pos.shape[0]
+    n_res = data.residue_number.shape[0]
+    assert n_atoms == 327, f"1crn has 327 atoms, got {n_atoms}"
+    assert n_res == 46, f"1crn has 46 residues, got {n_res}"
+
+    # Per-atom tensors
+    assert data.atom_sasa.shape == (n_atoms,)
+    assert data.charge.shape == (n_atoms,)
+    assert data.is_backbone.shape == (n_atoms,)
+    assert data.hetero.shape == (n_atoms,)
+    assert data.residue_index.shape == (n_atoms,)
+    assert len(data.atom_name) == n_atoms
+    assert len(data.element) == n_atoms
+
+    # residue_index points each atom into a valid residue slot
+    import torch
+
+    assert (data.residue_index >= 0).all()
+    assert (data.residue_index < n_res).all()
+
+    # Per-residue tensors stay at residue resolution
+    assert data.residue_sasa.shape == (n_res,)
+    assert data.dssp.shape == (n_res,)
+    assert data.hbond_count.shape == (n_res,)
+    assert data.phi.shape == (n_res,)
+
+
+@pytest.mark.skipif(not TEST_PDB.exists(), reason="1crn.pdb fixture not available")
+def test_proteon_pyg_data_atom_level_skip_atom_features() -> None:
+    """atom_features=False skips per-atom features but still emits pos / residue_index."""
+    proteon_pyg_data = _import_pyg()
+    data = proteon_pyg_data(
+        TEST_PDB, granularity="atom", atom_features=False, energy=False
+    )
+    assert hasattr(data, "pos")
+    assert hasattr(data, "residue_index")
+    assert not hasattr(data, "atom_sasa")
+    assert not hasattr(data, "charge")
+    assert hasattr(data, "residue_sasa")
+    assert hasattr(data, "dssp")
+
+
+@pytest.mark.skipif(not TEST_PDB.exists(), reason="1crn.pdb fixture not available")
+def test_proteon_features_transform_atom_granularity() -> None:
+    """The transform threads granularity through to proteon_pyg_data."""
+    pytest.importorskip("torch")
+    pytest.importorskip("torch_geometric")
+    from torch_geometric.data import Data
+
+    from proteon_pyg import ProteonFeatures
+
+    data = Data()
+    data.pdb_path = str(TEST_PDB)
+    tf = ProteonFeatures(granularity="atom")
+    out = tf(data)
+
+    assert hasattr(out, "atom_sasa")
+    assert hasattr(out, "residue_index")
+    assert hasattr(out, "residue_sasa")  # residue feats still present
+
+
+# ---------------------------------------------------------------------------
+# Batch helper (v0.0.3)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(
+    not (TEST_PDB.exists() and TEST_PDB_HET.exists()),
+    reason="1crn.pdb and/or 1ake.pdb fixture not available",
+)
+def test_proteon_pyg_data_batch_basic() -> None:
+    pytest.importorskip("torch")
+    pytest.importorskip("torch_geometric")
+    from proteon_pyg import proteon_pyg_data_batch
+
+    out = proteon_pyg_data_batch(
+        [TEST_PDB, TEST_PDB_HET, TEST_PDB], hbond_count=True
+    )
+    assert len(out) == 3
+    for d in out:
+        assert hasattr(d, "residue_sasa")
+        assert hasattr(d, "dssp")
+        assert hasattr(d, "proteon_energy_total")
+
+
+def test_proteon_pyg_data_batch_empty() -> None:
+    pytest.importorskip("torch")
+    pytest.importorskip("torch_geometric")
+    from proteon_pyg import proteon_pyg_data_batch
+
+    assert proteon_pyg_data_batch([]) == []
+
+
+@pytest.mark.skipif(not TEST_PDB.exists(), reason="1crn.pdb fixture not available")
+def test_proteon_pyg_data_batch_atom_granularity() -> None:
+    pytest.importorskip("torch")
+    pytest.importorskip("torch_geometric")
+    from proteon_pyg import proteon_pyg_data_batch
+
+    out = proteon_pyg_data_batch([TEST_PDB, TEST_PDB], granularity="atom")
+    assert len(out) == 2
+    for d in out:
+        assert hasattr(d, "atom_sasa")
+        assert hasattr(d, "residue_index")

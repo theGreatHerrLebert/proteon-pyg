@@ -1,6 +1,6 @@
 [project]
 name = "proteon-pyg"
-version = "0.0.1"
+version = "0.0.3"
 description = "Proteon structural features (SASA, DSSP, CHARMM19+EEF1 / AMBER96 energies) as PyTorch Geometric Data tensors"
 readme = "README.md"
 license = { text = "MIT" }
