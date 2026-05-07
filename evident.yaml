@@ -1,0 +1,82 @@
+version: 0.1
+project: proteon-pyg
+description: >
+  EVIDENT claim manifest for the proteon-pyg integration adapter.
+  Conforms to the EVIDENT workflow contract (claim -> trust strategy ->
+  oracle -> tolerance -> command -> artifact -> assumptions + failure modes)
+  defined at github.com/theGreatHerrLebert/evident.
+
+claims:
+  - id: proteon-pyg-residue-feature-parity
+    title: PyG Data tensor values equal direct proteon API outputs
+    case: CASE.md
+    source: src
+    tier: ci
+    trust_strategy:
+      - validation
+    claim: >
+      For every residue in the structure-derived PyG Data, the values
+      attached as tensors are exactly equal (post .numpy() round-trip) to
+      what proteon returns when called directly on the same PDB. Coverage:
+      residue_sasa, rsa, dssp (8-state int codes 0..7 with -1 sentinel
+      for non-AA), hbond_count (-1 sentinel for non-AA), phi/psi/omega
+      (NaN at chain termini and non-AA residues), and the
+      proteon_energy_<component> graph-level tensors. The adapter must
+      not lose, reorder, round, or rebadge values during the dict ->
+      tensor transcription.
+    evidence:
+      oracle:
+        - proteon (direct compute_proteon_features call, same process)
+      tolerance: >
+        Exact equality for floats (SASA, RSA, dihedrals, energy components)
+        post .numpy() round-trip; integer equality for DSSP int codes and
+        hbond_count; NaN-aware for RSA on non-standard residues and for
+        phi/psi/omega at chain termini (NaN must remain NaN at the same
+        indices).
+      command: >
+        /scratch/TMAlign/proteon/.venv/bin/python -m pytest
+        tests/test_parity.py -v
+      artifact: pytest exit code and captured failure diffs (stdout)
+    assumptions:
+      - The adapter shares a process and proteon version with the oracle;
+        proteon version skew is out of scope for this manifest.
+      - torch and torch_geometric are installed when the parity test runs.
+        When they are not, the test skips (matching the optional [pyg]
+        extra) rather than passes silently -- pytest.importorskip surfaces
+        the missing module, not a hidden zero-coverage path.
+      - DSSP_CLASSES is the canonical 8-state alphabet that proteon's
+        dssp() emits. Any character outside this alphabet decodes to '?'.
+      - Test fixtures live at /scratch/TMAlign/proteon/test-pdbs/ and tests
+        skip (not fail) when those files are missing.
+    failure_modes:
+      - proteon's dssp() output gains a 9th state symbol that
+        encode_dssp/decode_dssp does not know about. Mitigation
+        round-trip test (test_encode_dssp_round_trip) and DSSP_CLASSES
+        is exported as a public constant so users can detect drift.
+      - The order of residues iterated by structure.residues changes
+        between proteon versions, decoupling tensor indices from the
+        per-AA arrays returned by dssp() / hbond_count() /
+        backbone_dihedrals(). Mitigation
+        test_parity_residue_features_match_direct_proteon_call rebuilds
+        the AA index from data.is_amino_acid before comparing.
+      - NaN is silently coerced to 0.0 (or a real number) inside torch's
+        from_numpy path, breaking the NaN-position parity. Mitigation
+        explicit math.isnan checks at every dihedral index in the
+        parity test.
+
+# Deferred claims are tracked separately so the validated manifest never
+# carries placeholder evidence (Validation Theater anti-pattern). Each entry
+# is promoted into `claims:` only once it has real oracle, tolerance, command,
+# and artifact.
+deferred_claims:
+  - id: proteon-pyg-atom-level-parity
+    title: Atom-level Data tensors match proteon per-atom outputs
+    intended_tier: ci
+    blockers:
+      - Atom-level proteon_pyg_data not yet implemented (planned v0.0.2).
+
+  - id: proteon-pyg-batch-parity
+    title: Batched feature attachment equals a single-call loop
+    intended_tier: ci
+    blockers:
+      - Batch entry point not yet implemented (planned v0.0.3).
