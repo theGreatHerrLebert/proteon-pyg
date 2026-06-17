@@ -17,7 +17,7 @@ classifiers = [
 dependencies = [
     # v0.0.1 of proteon-pyg requires the batch primitives added in proteon
     # 0.2.0; the same primitives that power proteon-graphein's batch helper.
-    "proteon>=0.2.0",
+    "proteon>=0.3.0",
     "numpy",
 ]
 
